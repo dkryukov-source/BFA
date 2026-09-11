@@ -25,7 +25,13 @@ STANDING_RE = re.compile(r'Standing Charge\s+(\d+)\s*days\s*@\s*([\d.]+)p/day')
 
 def pdf_to_text(path):
     if not shutil.which("pdftotext"):
-        sys.exit("pdftotext not found. Install poppler-utils.")
+        sys.exit(
+            "pdftotext not found on PATH. Install poppler:\n"
+            "  Linux/WSL : sudo apt-get install poppler-utils\n"
+            "  macOS     : brew install poppler\n"
+            "  Windows   : download a poppler build, unzip it, and add its\n"
+            "              Library\\bin directory to PATH; or use conda:\n"
+            "              conda install -c conda-forge poppler")
     # -raw keeps each table row on one line; -layout scrambles the narrow columns.
     out = subprocess.run(["pdftotext", "-raw", path, "-"],
                          capture_output=True, text=True, check=True)
