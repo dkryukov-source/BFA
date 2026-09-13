@@ -15,8 +15,8 @@ contest PC.
 Point it at an opaque folder of radio material and it returns a ranked list.
 
 ```powershell
-.\inventory_radio_folder.ps1 -Path "C:\Users\Multiple Monitors\OneDrive\Dima\Radio"
-.\inventory_radio_folder.ps1 -Path "...\Dima\Radio" -StageTo C:\temp\stage -HydrateCloudFiles
+.\inventory_radio_folder.ps1 -Path "D:\Radio"
+.\inventory_radio_folder.ps1 -Path "D:\Radio" -StageTo C:\temp\stage -HydrateCloudFiles
 ```
 
 ```

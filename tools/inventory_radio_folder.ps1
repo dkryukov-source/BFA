@@ -7,7 +7,7 @@
     and writes a CSV manifest plus a summary. Optionally stages the files worth
     keeping into a flat folder ready to commit to the BFA repo.
 
-    Written for:  C:\Users\Multiple Monitors\OneDrive\Dima\Radio
+    Written for a OneDrive-backed ham-radio folder tree.
 
     Classifies into:
       CABRILLO      a contest log (START-OF-LOG). Extracts CALLSIGN, CONTEST,
@@ -36,17 +36,17 @@
     pulling gigabytes. Pass this to download and classify them too.
 
 .EXAMPLE
-    .\inventory_radio_folder.ps1 -Path "C:\Users\Multiple Monitors\OneDrive\Dima\Radio"
+    .\inventory_radio_folder.ps1 -Path "D:\Radio"
 
 .EXAMPLE
     .\inventory_radio_folder.ps1 `
-        -Path "C:\Users\Multiple Monitors\OneDrive\Dima\Radio" `
+        -Path "D:\Radio" `
         -StageTo "C:\temp\bfa-stage" -HydrateCloudFiles
 #>
 
 [CmdletBinding()]
 param(
-    [string]$Path = "C:\Users\Multiple Monitors\OneDrive\Dima\Radio",
+    [Parameter(Mandatory=$true)][string]$Path,
     # Bug 4: the manifest lists every filename in the tree, which can include
     # passport and booking scans. It must never default into a repo checkout.
     [string]$OutCsv = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'bfa\radio_inventory.csv'),

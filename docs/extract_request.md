@@ -36,11 +36,10 @@ DK's own machine has his network and his Gmail and can reach all of it.
 
 ## Step 0 — inventory the local Radio folder FIRST
 
-```
-C:\Users\Multiple Monitors\OneDrive\Dima\Radio
-```
+The operator's OneDrive-backed radio folder (path held locally, deliberately
+not recorded in this public repository).
 
-DK reports this folder holds a lot of material of unknown composition (~389
+It holds a lot of material of unknown composition (~389
 files seen referenced elsewhere). **Triage it before anything else** — it may
 already contain items 1, 2, 5, 6 and 7d, which would make most of the network
 harvest unnecessary.
@@ -48,11 +47,11 @@ harvest unnecessary.
 Two equivalent scripts are committed; use whichever suits:
 
 ```powershell
-.\tools\inventory_radio_folder.ps1 -Path "C:\Users\Multiple Monitors\OneDrive\Dima\Radio"
+.\tools\inventory_radio_folder.ps1 -Path "<the Radio folder>"
 ```
 
 ```
-python3 tools/inventory_radio_folder.py "C:/Users/Multiple Monitors/OneDrive/Dima/Radio" --csv inv.csv
+python3 tools/inventory_radio_folder.py "<the Radio folder>" --csv inv.csv
 ```
 
 They classify every file **by content, not extension** into CABRILLO / LCR_UBN /
@@ -63,7 +62,7 @@ list in one pass.
 Then stage what matters:
 
 ```powershell
-.\tools\inventory_radio_folder.ps1 -Path "...\Dima\Radio" -StageTo C:\temp\bfa-stage -HydrateCloudFiles
+.\tools\inventory_radio_folder.ps1 -Path "<the Radio folder>" -StageTo C:\temp\bfa-stage -HydrateCloudFiles
 ```
 
 **OneDrive caveat — read this before running with `-HydrateCloudFiles`.** Files
