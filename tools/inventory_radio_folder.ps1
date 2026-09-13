@@ -47,7 +47,9 @@
 [CmdletBinding()]
 param(
     [string]$Path = "C:\Users\Multiple Monitors\OneDrive\Dima\Radio",
-    [string]$OutCsv = "radio_inventory.csv",
+    # Bug 4: the manifest lists every filename in the tree, which can include
+    # passport and booking scans. It must never default into a repo checkout.
+    [string]$OutCsv = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'bfa\radio_inventory.csv'),
     [string]$StageTo = "",
     [switch]$HydrateCloudFiles
 )
@@ -64,21 +66,36 @@ Write-Host "Scanning $Path ..." -ForegroundColor Cyan
 # FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x400000 -> OneDrive online-only placeholder
 $RECALL = 0x400000
 
+# Bug 1: binaries (.wav .pdf .zip .chm .DB .DOC) decoded as ASCII produced 24
+# false LCR_UBN hits out of 26. Never content-sniff a file containing NUL bytes,
+# and never sniff a known-binary extension at all.
+$BinaryExt = @('.wav','.mp3','.mp4','.avi','.jpg','.jpeg','.png','.gif','.bmp','.tif','.tiff',
+               '.pdf','.zip','.rar','.7z','.gz','.tar','.cab','.chm','.exe','.dll','.msi',
+               '.doc','.docx','.xls','.xlsx','.ppt','.pptx','.db','.mdb','.accdb','.bin',
+               '.iso','.dmg','.wav','.ogg','.flac','.psd','.ico')
+
 function Get-Head {
+    <# Returns ASCII head, or $null when the file is binary or unreadable. #>
     param([string]$File, [int]$Bytes = 8192)
     try {
         $fs = [System.IO.File]::Open($File, 'Open', 'Read', 'ReadWrite')
         try {
             $len = [Math]::Min($Bytes, $fs.Length)
+            if ($len -eq 0) { return '' }
             $buf = New-Object byte[] $len
             [void]$fs.Read($buf, 0, $len)
+            # A NUL byte in the head means binary. Text logs never contain one.
+            if ([Array]::IndexOf($buf, [byte]0) -ge 0) { return $null }
             return [System.Text.Encoding]::ASCII.GetString($buf)
         } finally { $fs.Dispose() }
     } catch { return $null }
 }
 
 $rows = New-Object System.Collections.Generic.List[object]
-$files = Get-ChildItem -LiteralPath $Path -Recurse -File -Force -ErrorAction SilentlyContinue
+# Bug 3: SilentlyContinue hid unreadable folders entirely. Capture and report.
+$scanErrors = @()
+$files = Get-ChildItem -LiteralPath $Path -Recurse -File -Force `
+            -ErrorAction SilentlyContinue -ErrorVariable +scanErrors
 
 Write-Host ("Found {0} files. Classifying..." -f $files.Count) -ForegroundColor Cyan
 
@@ -94,7 +111,8 @@ foreach ($f in $files) {
         Ext         = $f.Extension.ToLower()
         SizeBytes   = $f.Length
         Modified    = $f.LastWriteTimeUtc.ToString('yyyy-MM-dd')
-        CloudOnly   = $cloudOnly
+        WasCloudOnly = $cloudOnly
+        Read         = $false
         Type        = 'OTHER'
         Callsign    = ''
         Contest     = ''
@@ -118,15 +136,24 @@ foreach ($f in $files) {
     # Cheap extension-only classifications first - avoid reading big binaries.
     if ($row.Ext -eq '.s3db') {
         $row.Type = 'N1MM_DB'
+        $row.Read = $true
         $row.Note = 'N1MM contest database - contains logged QSOs'
+        $rows.Add([pscustomobject]$row); continue
+    }
+
+    if ($row.Ext -in $BinaryExt) {
+        $row.Note = 'binary extension - not content-sniffed'
         $rows.Add([pscustomobject]$row); continue
     }
 
     $head = Get-Head -File $f.FullName
     if ($null -eq $head) {
-        $row.Note = 'unreadable'
+        $row.Note = 'binary or unreadable - not content-sniffed'
         $rows.Add([pscustomobject]$row); continue
     }
+    # Bug 2: the attribute was sampled before hydration. Record that we actually
+    # read the bytes, separately from whether it started as a placeholder.
+    $row.Read = $true
 
     if ($head -match 'START-OF-LOG') {
         $row.Type = 'CABRILLO'
@@ -138,7 +165,10 @@ foreach ($f in $files) {
             $row.QsoCount = (Select-String -LiteralPath $f.FullName -Pattern '^QSO:' -AllMatches).Count
         } catch { }
     }
-    elseif ($head -match 'Log Checking Report|LOG CHECKING REPORT|\bUBN\b|Not in log|NIL\b' -or $row.Ext -eq '.rpt') {
+    elseif ($row.Ext -eq '.rpt' -or
+            $head -match '(?i)log\s*check' -or
+            ($head -match '(?i)\bUBN\b'      -and $head -match '(?im)^\s*Call:') -or
+            ($head -match '(?i)\bnot in log\b' -and $head -match '(?i)\bQSO:')) {
         $row.Type = 'LCR_UBN'
         if ($head -match '(?im)Call:\s*(\S+)') { $row.Callsign = $Matches[1].ToUpper() }
         if ($head -match '(?i)(\d{4})\s+CQ\s*(WW|WORLD)') { $row.Year = $Matches[1] }
@@ -170,11 +200,20 @@ Write-Host "`n=== SUMMARY ===" -ForegroundColor Yellow
 $rows | Group-Object Type | Sort-Object Count -Descending |
     Format-Table @{n='Type';e={$_.Name}}, Count -AutoSize
 
-$cloud = ($rows | Where-Object CloudOnly).Count
-if ($cloud -gt 0 -and -not $HydrateCloudFiles) {
-    Write-Host "$cloud file(s) are OneDrive online-only and were NOT read." -ForegroundColor Yellow
+$wasCloud = ($rows | Where-Object WasCloudOnly).Count
+$notRead  = ($rows | Where-Object { -not $_.Read }).Count
+Write-Host ("{0} file(s) started as OneDrive placeholders; {1} were not read." -f $wasCloud, $notRead) -ForegroundColor Yellow
+if ($notRead -gt 0 -and -not $HydrateCloudFiles) {
     Write-Host "Re-run with -HydrateCloudFiles to download and classify them." -ForegroundColor Yellow
 }
+if ($scanErrors.Count -gt 0) {
+    Write-Host "`nWARNING: $($scanErrors.Count) folder(s) could not be entered:" -ForegroundColor Red
+    $scanErrors | Select-Object -First 10 | ForEach-Object { Write-Host "  $($_.TargetObject)" }
+} else {
+    Write-Host "All folders were readable (0 traversal errors)." -ForegroundColor DarkGray
+}
+Write-Host "`nNOTE: $OutCsv lists every filename in the tree, which may include" -ForegroundColor DarkYellow
+Write-Host "personal documents. It defaults outside any repo. Do not commit it." -ForegroundColor DarkYellow
 
 Write-Host "`n=== CONTEST LOGS FOUND ===" -ForegroundColor Yellow
 $rows | Where-Object { $_.Type -eq 'CABRILLO' } |

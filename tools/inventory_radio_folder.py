@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import re
 import shutil
 import sys
@@ -34,12 +35,27 @@ from pathlib import Path
 
 HEAD = 8192
 
+# Binaries decoded as ASCII generate false LCR_UBN hits (a .wav or .pdf whose
+# bytes happen to contain "NIL" or "UBN"). Never content-sniff these, and never
+# sniff anything whose head contains a NUL byte.
+BINARY_EXT = {
+    ".wav", ".mp3", ".mp4", ".avi", ".mov", ".jpg", ".jpeg", ".png", ".gif",
+    ".bmp", ".tif", ".tiff", ".pdf", ".zip", ".rar", ".7z", ".gz", ".tar",
+    ".cab", ".chm", ".exe", ".dll", ".msi", ".doc", ".docx", ".xls", ".xlsx",
+    ".ppt", ".pptx", ".db", ".mdb", ".accdb", ".bin", ".iso", ".dmg", ".ogg",
+    ".flac", ".psd", ".ico",
+}
+
 RE_CALLSIGN = re.compile(r"^CALLSIGN:\s*(\S+)", re.I | re.M)
 RE_CONTEST = re.compile(r"^CONTEST:\s*(\S+)", re.I | re.M)
 RE_QSOYEAR = re.compile(r"^QSO:\s+\S+\s+\S+\s+(\d{4})-", re.I | re.M)
 RE_VER = re.compile(r"VER\d{8}")
 RE_CTYENT = re.compile(r"^\s*\w[\w .&'\-/]*:\s+\d{1,2}:\s+\d{1,2}:\s+[A-Z]{2}:", re.M)
-RE_LCR = re.compile(r"Log Checking Report|\bUBN\b|Not in log|\bNIL\b", re.I)
+RE_LCR_STRONG = re.compile(r"log\s*check", re.I)
+RE_LCR_UBN = re.compile(r"\bUBN\b", re.I)
+RE_LCR_NIL = re.compile(r"\bnot in log\b", re.I)
+RE_HAS_CALLLINE = re.compile(r"^\s*Call:", re.I | re.M)
+RE_HAS_QSO = re.compile(r"\bQSO:", re.I)
 RE_ADIF = re.compile(r"<EOH>|<CALL:\d+>", re.I)
 RE_LCRCALL = re.compile(r"Call:\s*(\S+)", re.I)
 RE_LCRYEAR = re.compile(r"(\d{4})\s+CQ\s*(?:WW|WORLD)", re.I)
@@ -51,11 +67,15 @@ STAGE_MAP = {
 
 
 def head_of(p: Path) -> str | None:
+    """ASCII head, or None when the file is binary or unreadable."""
     try:
         with p.open("rb") as f:
-            return f.read(HEAD).decode("ascii", "replace")
+            b = f.read(HEAD)
     except OSError:
         return None
+    if b"\x00" in b:          # a NUL byte means binary; text logs never have one
+        return None
+    return b.decode("ascii", "replace")
 
 
 def classify(p: Path) -> dict:
@@ -79,9 +99,13 @@ def classify(p: Path) -> dict:
         row["note"] = "N1MM contest database - contains logged QSOs"
         return row
 
+    if row["ext"] in BINARY_EXT:
+        row["note"] = "binary extension - not content-sniffed"
+        return row
+
     h = head_of(p)
     if h is None:
-        row["note"] = "unreadable"
+        row["note"] = "binary or unreadable - not content-sniffed"
         return row
 
     if "START-OF-LOG" in h.upper():
@@ -101,7 +125,10 @@ def classify(p: Path) -> dict:
                 if line.upper().startswith("QSO:"))
         except OSError:
             pass
-    elif row["ext"] == ".rpt" or RE_LCR.search(h):
+    elif (row["ext"] == ".rpt"
+          or RE_LCR_STRONG.search(h)
+          or (RE_LCR_UBN.search(h) and RE_HAS_CALLLINE.search(h))
+          or (RE_LCR_NIL.search(h) and RE_HAS_QSO.search(h))):
         row["type"] = "LCR_UBN"
         m = RE_LCRCALL.search(h)
         if m:
@@ -134,7 +161,11 @@ def main(argv):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("root")
-    ap.add_argument("--csv", default="radio_inventory.csv")
+    # Bug 4: the manifest lists every filename in the tree, which can include
+    # personal documents. It must never default into a repo checkout.
+    ap.add_argument("--csv", default=str(
+        Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".cache")
+        / "bfa" / "radio_inventory.csv"))
     ap.add_argument("--stage", default=None,
                     help="copy classified contest material here, by type")
     args = ap.parse_args(argv)
@@ -146,6 +177,7 @@ def main(argv):
 
     rows = [classify(p) for p in sorted(root.rglob("*")) if p.is_file()]
 
+    Path(args.csv).parent.mkdir(parents=True, exist_ok=True)
     with open(args.csv, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()) if rows else
                            ["path", "name", "ext", "size", "type", "callsign",
@@ -153,6 +185,8 @@ def main(argv):
         w.writeheader()
         w.writerows(rows)
     print(f"manifest -> {args.csv}")
+    print("  NOTE: lists every filename in the tree, which may include personal")
+    print("  documents. Defaults outside any repo. Do not commit it.")
 
     print("\n=== SUMMARY ===")
     for t, n in Counter(r["type"] for r in rows).most_common():

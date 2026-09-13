@@ -178,3 +178,128 @@ rate-limit behaviour and the reasoning. `tools/harvest_cqww.py` and
 
 If Gmail turns out not to be reachable from your side either, say so rather than
 spending time on it.
+
+
+---
+
+# Round 2 — asks after the local Step 0 report
+
+Step 0 is done: 13,426 files scanned, 45 distinct CQ WW files staged. The
+following are the things that report raised and did not settle.
+
+## R1. PZ5CO CW 2023 — two files, same QSO count (8,037). Which was submitted?
+
+This is the **validation-gate log**, so picking the wrong one invalidates the
+gate. Decisive test, in order:
+
+1. `diff` them. If they differ only in header fields, go to 2.
+2. Compare each file's `CLAIMED-SCORE:` header against the published claimed
+   score **15,208,050**. The match is the submitted log.
+3. If both match or neither does, prefer the one whose `CREATED-BY:` is the
+   N1MM version in use that season, and record the ambiguity in the manifest.
+
+Report both headers verbatim either way.
+
+## R2. PZ5DX CW 2024 — two files differing by one QSO
+
+The extra line is:
+
+```
+QSO: 1822 CW 2024-11-24 0057 PZ5DX 599 9 V26K 599 08
+```
+
+Same question: which was submitted? Compare `CLAIMED-SCORE:` against the
+published PZ5DX 2024 claimed score.
+
+Two incidental notes, both already handled by our parser but worth recording:
+- **`599 9`** — the sent zone is a single digit here, not `09`. Cabrillo zone
+  padding is inconsistent in the wild. `build_zone_db.py` strips leading zeros,
+  so both forms normalise to 9.
+- `1822` kHz is **160m**, and it is a V26K QSO — i.e. the one differing QSO is a
+  topband contact with the benchmark station.
+
+## R3. Category headers for the benchmark logs — needed before any comparison
+
+For **every** reference log staged, report these headers verbatim:
+
+```
+CALLSIGN  CONTEST  CATEGORY-OPERATOR  CATEGORY-ASSISTED  CATEGORY-BAND
+CATEGORY-POWER  CATEGORY-TRANSMITTER  CATEGORY-OVERLAY  CLAIMED-SCORE  OPERATORS
+```
+
+**Why this is now the highest-value thing in the staged set.** The QSO counts you
+reported change the picture:
+
+| Station | CW 2023 QSOs |
+|---|---|
+| V26K | 9,217 |
+| **PZ5CO** | **8,037** |
+| P40L (Aruba, **zone 9**) | 7,727 |
+
+P40L is the correct same-zone benchmark, and it logged **310 fewer QSOs than
+PZ5CO**. If P40L is a comparable category, the premise that PZ is
+structurally short of its zone peers is wrong, and the low-band investment case
+has to be rebuilt on a different basis. If P40L is low power or single band, the
+comparison is void. **Without the category headers the numbers are unusable** —
+do not let anyone draw a conclusion from the raw counts alone.
+
+## R4. V26K 2024 and 2025 — needed for the pace projection
+
+You have 2019, 2021, 2022, 2023 (8,226 / 8,414 / 9,105 / 9,217). The A5 pace
+target extrapolates the V26K trend to 2026; a projection anchored on data
+ending in 2023 and crossing the solar maximum is weak. **2024 and 2025 are the
+two most load-bearing years and both are missing.** Harvest them first:
+
+```
+python3 tools/harvest_cqww.py logs --call V26K --years 2024-2025 --modes cw
+```
+
+## R5. N1MM / B0 — you do not need the real station
+
+The report says N1MM is not installed and treats B0 as blocked until a station
+is available. It is not blocked. **Any Windows machine will answer all three
+open questions**, because they are about the wire format, not about this
+station's configuration:
+
+1. Install N1MM Logger+.
+2. Create a new contest, type **CQWW**, mode CW. Enter any callsign.
+3. Enable the broadcasts (all default off) — `IsBroadcastContact`,
+   `IsBroadcastSpots`, `IsBroadcastScoreUDP`, `IsBroadcastExternalLookup`,
+   `IsBroadcastRadio`. Destination `127.0.0.1`, ports **12060** and **12050**.
+4. Log one QSO with a plausible exchange, e.g. `K1ABC 599 05`.
+5. Capture raw datagrams on both ports. Then edit that QSO, delete it, and type
+   a callsign without logging.
+
+That answers: which field carries the received zone in CQ WW, `rxfreq`/`txfreq`
+scaling, and whether `timestamp` is UTC. The only thing genuinely requiring the
+PZ5DX machine is confirming its own port configuration, which is a one-line
+check later.
+
+The old `RCC_CallHistory.txt` and `Master DAT\ARRLDXCW_2025-003.txt` you found
+are **not** CQ WW call-history files — the exchange differs. Keep them as format
+references only.
+
+## R6. Private repo — agreed, and here is the split
+
+Contest data should not go in the public `BFA` repo. Logs carry callsigns,
+timestamps and locations, and the Step 0 manifest demonstrated the adjacent risk
+directly by listing passport and booking scans.
+
+Proposed split:
+
+- **`BFA` (public)** — `tools/`, `docs/`, `data/cty/`, `data/scp/`,
+  `data/logs/fixtures/`. Code and public reference data only.
+- **new private repo** — all own logs, all UBN/LCR reports, the harvested
+  public-log archive, and any derived database keyed to real callsigns.
+
+The tools take the data root as an argument, so nothing needs to change in them:
+point `--out` / the positional root at a checkout of the private repo.
+
+DK needs to name the private repo. Until then keep the intake local, as you have.
+
+## R7. Manifest gaps to fill
+
+Still outstanding from the original manifest: own UBNs (Gmail — in progress),
+own 2025 CW and SSB logs (Gmail — in progress), V26K 2024/2025 (R4), Zone 9
+multi-op CW 2023-25 and SSB 2025 (harvest), current MASTER.SCP (the committed
+copy is Release 2022.06.03 and does not contain PZ5DX).
