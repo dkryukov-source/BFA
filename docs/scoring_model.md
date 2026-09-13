@@ -21,7 +21,9 @@ carries money.
   The 2-point variant applies **only** when both stations are in North America
   and does **not** apply to PZ. W/VE from PZ = different continent = **3 points**.
 - **Multipliers:** zones per band + countries per band, summed over six bands.
-  Each worth 1, once per band.
+  Each worth 1, once per band. The country list is **DXCC entities plus the WAE
+  additions plus IG9/IH9** - not DXCC alone. Read from the rules directly by the
+  local session; a parser resolving only DXCC will undercount countries.
 - **Score** = total QSO points x total multipliers.
 - **Exchange:** RST + CQ zone.
 
@@ -121,41 +123,147 @@ corpus exists — but it should not be the module the schedule is built around.
 
 ---
 
-## 5. NIL is not addressable from your own log
+## 5. MEASURED — PZ5CO CW 2023, from the private log-checking report
 
-Published CQ WW norms: busted calls ~1.5% of QSOs, NIL ~1.0% of QSOs
-(confidence 6/10 — these are blog-stated aggregates, not per-category).
+The estimates below are no longer estimates. The operator's private LCR gives:
 
-NIL means the other station has no record of the contact. Causes:
-- he miscopied **your** call — his error, your penalty
-- he never logged it (dupe-check dropped it, logging slip)
-- he did not submit a log → then it *cannot be checked* and is safe
+| | |
+|---|---|
+| Claimed score | 15,208,050 |
+| Final score | **14,328,600** |
+| QSOs after checking | 7,746 |
+| Zones | **151** |
+| Countries | **499** |
+| Incorrect Call (IC) | **125** |
+| Incorrect Exchange (IE) | **39** |
+| Not In Log (NIL) | **16** |
 
-**No amount of checking your own log detects a NIL.** You copied him correctly;
-the failure is on his side of the exchange. Mitigation is operating practice —
-call repetition discipline, confirming before logging under marginal conditions,
-not accepting a partial — not software.
+### The figures verify themselves
 
-### Therefore the 5.78% is not all recoverable
+151 + 499 = **650 multipliers**. And:
 
-PZ5CO CW 2023: claimed 15,208,050, final 14,328,600, reduction 879,450 = 5.78%.
-Against published norms this is somewhat worse than typical, not catastrophic.
-V26K at ~2.1% is genuinely excellent.
+```
+14,328,600 / 650 = 22,044   exactly
+15,208,050 / 650 = 23,397   exactly
+```
 
-Decomposition (unknown until the LCRs are read — **this is why item 3 on the
-acquisition list matters**):
-- NIL component — **not software-addressable**
-- Busted-call component — **partially** addressable (near-match warnings, live)
-- Busted-exchange component — addressable (A2b), but cheap per unit
-- Dupe component — trivially addressable, already handled by N1MM
+650 is the **only** integer that divides both scores anywhere in 600-700. So the
+multiplier count was **identical before and after log checking**:
 
-The spec's "worth ~500k" assumes essentially the whole gap is recoverable.
-A more defensible estimate is that software recovers **the addressable fraction
-of the bust component only**. Pending the LCR decomposition, plan on
-**~150-250k**, not 500k. Confidence 6/10 — this number should be replaced with a
-computed one as soon as the LCRs are in.
+> **PZ5CO lost zero multipliers in 2023. The entire 879,450-point reduction was
+> QSO points — 1,353 of them.**
 
----
+That kills a second-order worry the build spec carried (busts costing multipliers)
+for this log at least, and it makes the decomposition below exact rather than
+modelled.
+
+### The penalty model is confirmed by the operator's own log
+
+Applying §3 (bust/NIL = removed + 2x penalty = 3x cost; exchange = 1x) at 3 points
+per QSO:
+
+```
+(IC 125 + NIL 16) x 9  +  IE 39 x 3  =  1,386 predicted points lost
+actual                                  1,353
+ratio                                   0.976
+```
+
+A 2.4% overshoot is exactly what a handful of 1-point (South American) contacts
+among the removed QSOs would produce. **The penalty asymmetry in §3 is correct.**
+
+### Where the 879,450 actually went
+
+| Class | QSOs | Points | Score | Share of loss | Software-addressable? |
+|---|---:|---:|---:|---:|---|
+| **Incorrect Call** | 125 | 1,098 | **713,839** | **81.2%** | **Yes — partially, and this is the target** |
+| Not In Log | 16 | 141 | 91,371 | 10.4% | **No** — the other station didn't log you |
+| Incorrect Exchange | 39 | 114 | 74,239 | 8.4% | Yes (A2b) |
+
+## 5a. Consequences — this settles the module priority
+
+**1. A2b, the US-zone whitelist, addresses 8.4% of the loss.** The build spec
+names it the "HIGHEST-VALUE MODULE". On the operator's own numbers it is the
+*smallest* of the three classes, on the cheapest penalty tier. Build it — it is
+nearly free once the corpus exists — but it is not what the schedule should be
+built around.
+
+**2. Callsign accuracy is 81% of the problem.** IC outnumbers IE 3.2 to 1 *and*
+costs 3x more per occurrence — roughly **10x the score impact**. The checks that
+deserve the engineering are the ones that catch a wrong *call*:
+near-match against a corpus-frequent callsign, unresolvable-in-cty.dat, and
+unique-against-corpus as a bust predictor.
+
+**3. NIL is 10.4% and is not yours to fix.** Operating practice, not software.
+
+### Revised recovery estimate — upward
+
+Earlier this document estimated 150-250k, reasoning from published averages. With
+the real decomposition:
+
+| If a live near-match check reduces IC by | Recovery |
+|---|---|
+| 30% | ~214k |
+| 50% | ~357k |
+| 70% | ~500k |
+
+**Plan on 200-400k**, concentrated entirely in callsign copy. The earlier
+150-250k figure was too pessimistic because it assumed the loss was spread across
+classes; it is not — it is 81% in one class, and that class is the one a live
+warning can actually attack.
+
+## 5b. Cross-year context
+
+| Contest | Final | QSOs | IC | IE | NIL |
+|---|---:|---:|---:|---:|---:|
+| PZ5CO CW 2022 | 6,335,373 | 4,478 | 34 | 30 | 14 |
+| **PZ5CO CW 2023** | **14,328,600** | **7,746** | **125** | **39** | **16** |
+| PZ5CO SSB 2023 | 10,505,077 | 6,421 | 84 | 73 | 23 |
+| PZ5DX CW 2024 | 12,596,675 | 6,906 | 74 | 37 | 33 |
+| PZ5DX CW 2025 | 2,225,483 | 4,048 | 67 | 39 | 10 |
+| PZ5DX SSB 2025 | 2,162,320 | 4,328 | 50 | 34 | 13 |
+
+Two things stand out.
+
+**IC nearly quadrupled from 2022 to 2023** (34 to 125) while QSOs only rose 73%.
+The 2023 bust *rate* per QSO roughly doubled. Worth understanding — higher rate,
+bigger pileups, fatigue, or a different operating posture. It is also why 2023
+is the right year to target: the accuracy headroom is real and recent.
+
+**On SSB, IE is nearly as large as IC** (73 vs 84 in 2023). Zone copy is a
+materially bigger share of the problem on phone than on CW. So A2b's value is
+mode-dependent: minor for the CW target, substantial for SSB.
+
+## 5c. THE 2025 COLLAPSE — unexplained, and it invalidates the 2026 target
+
+| Entry | Final score | QSOs | Score per QSO |
+|---|---:|---:|---:|
+| PZ5DX CW 2024 | 12,596,675 | 6,906 | 1,824 |
+| **PZ5DX CW 2025** | **2,225,483** | **4,048** | **550** |
+| **PZ5DX SSB 2025** | **2,162,320** | **4,328** | **500** |
+
+QSOs fell 41%; score fell **82%**. Score per QSO fell by two thirds, which means
+the **multiplier count collapsed** — roughly 600 down to under 200. That is a
+band-coverage collapse, not a rate problem: consistent with operating one or two
+bands, a major antenna failure, or a part-time entry.
+
+**The build spec's A5 sets a 2026 target near 15.3M, extrapolated from V26K's
+trend and anchored on PZ5CO 2023 (14.3M). The operator's two most recent entries
+are 2.2M.** Every abort checkpoint in the spec (h24 >= 7,525,000, h36 >=
+10,700,000, h42 >= 13,500,000) is derived from that target and is therefore
+currently built on an unexplained discontinuity.
+
+**This is the highest-priority open question in the project.** Until it is
+answered, no 2026 target is meaningful. The answer determines whether 2026 is a
+title attempt or a rebuild:
+
+- If 2025 was a deliberate part-time or single-band entry -> ignore it, target
+  from 2023/2024.
+- If 2025 was an antenna or station failure -> fixing it is worth ~10M, which
+  dwarfs every software lever in this document combined, and the entire build
+  priority changes.
+
+Read the CATEGORY-BAND, CATEGORY-OPERATOR and CATEGORY-POWER headers of the 2025
+logs, and the per-band QSO distribution, before anything else.
 
 ## 6. Uniques are a predictor, not a penalty class
 

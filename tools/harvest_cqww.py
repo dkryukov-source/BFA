@@ -163,7 +163,8 @@ def harvest_category(base: str, year: int, mode_suffix: str, ext: str,
     cat = f"{year}{mode_suffix}"
     cat_url = f"{base}/{cat}/"
     out_dir = out_root / cat
-    counters = {"ok": 0, "skipped": 0, "failed": 0, "missing": 0, "bytes": 0}
+    counters = {"ok": 0, "skipped": 0, "failed": 0, "missing": 0, "bytes": 0,
+                "index_failed": 0, "absent": 0}
     lock = threading.Lock()
 
     if only_call:
@@ -173,14 +174,24 @@ def harvest_category(base: str, year: int, mode_suffix: str, ext: str,
             names = list_directory(cat_url, ext)
         except urllib.error.HTTPError as e:
             if e.code == 404:
+                # A category that does not exist is a real answer, not a
+                # failure: publiclcr has no 2025 yet, and rtty is logs-only.
                 log(f"[{cat}] no such category")
+                counters["absent"] = 1
                 return counters
-            raise
+            # Any other HTTP status means we could not enumerate a category
+            # that probably DOES exist. Silently returning zeros here made a
+            # skipped year indistinguishable from a complete one.
+            log(f"  ERR [{cat}] index HTTP {e.code} - CATEGORY SKIPPED")
+            counters["index_failed"] = 1
+            return counters
         except Exception as e:  # noqa: BLE001
-            log(f"[{cat}] index failed: {e}")
+            log(f"  ERR [{cat}] index failed: {e} - CATEGORY SKIPPED")
+            counters["index_failed"] = 1
             return counters
         if not names:
-            log(f"[{cat}] index listed no {ext} files")
+            log(f"  ERR [{cat}] index listed no {ext} files - CATEGORY SKIPPED")
+            counters["index_failed"] = 1
             return counters
 
     log(f"[{cat}] {len(names)} file(s) -> {out_dir}")
@@ -260,7 +271,8 @@ def main(argv: list[str]) -> int:
         modes.append(MODE_SUFFIX[m])
     modes = sorted(set(modes))
 
-    total = {"ok": 0, "skipped": 0, "failed": 0, "missing": 0, "bytes": 0}
+    total = {"ok": 0, "skipped": 0, "failed": 0, "missing": 0, "bytes": 0,
+             "index_failed": 0, "absent": 0}
     for year in parse_years(args.years):
         for ms in modes:
             c = harvest_category(base, year, ms, ext, out_root, args, args.call)
@@ -270,11 +282,19 @@ def main(argv: list[str]) -> int:
     log(f"\nTOTAL ok={total['ok']} skipped={total['skipped']} "
         f"missing={total['missing']} failed={total['failed']} "
         f"bytes={total['bytes']}")
+    if total["absent"]:
+        log(f"      {total['absent']} category/categories did not exist (normal)")
+    if total["index_failed"]:
+        log(f"\n*** {total['index_failed']} CATEGORY/CATEGORIES WERE SKIPPED "
+            f"because their index could not be listed. The data for those "
+            f"year/mode combinations is INCOMPLETE. Re-run them. ***")
 
     if not args.no_manifest and out_root.exists():
         write_manifest(out_root)
 
-    return 1 if total["failed"] else 0
+    # A skipped category is a failure: a silent zero here previously made an
+    # incomplete harvest look like a clean one.
+    return 1 if (total["failed"] or total["index_failed"]) else 0
 
 
 if __name__ == "__main__":

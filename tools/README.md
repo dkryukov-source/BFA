@@ -9,6 +9,33 @@ contest PC.
 | `build_zone_db.py` | Build the callsign -> CQ zone ground-truth database (A2b) from harvested Cabrillo logs. |
 | `inventory_radio_folder.ps1` | Triage a Windows/OneDrive ham-radio folder: classify by content, extract log metadata, stage what matters. |
 | `inventory_radio_folder.py` | Cross-platform twin of the above, same classification logic. |
+| `summarize_logs.py` | Reduce Cabrillo logs to compact per-band / per-hour aggregates. |
+
+## summarize_logs.py
+
+```
+python3 tools/summarize_logs.py LOGDIR --out summaries.jsonl
+```
+
+The offline modules do not need raw QSO text:
+
+| Module | Needs |
+|---|---|
+| A0 low-band sizing | QSOs and mults per band |
+| A3 off-time optimiser | QSOs and new mults per UTC hour |
+| A4 band plan | QSOs and new mults per band per UTC hour |
+| A5 pace curve | cumulative score per UTC hour |
+
+All of that is aggregates. An 8,000-QSO Cabrillo log reduces to a few kB of
+counts and loses nothing those modules use.
+
+**Raw logs are only required for A2 and A6**, which work at QSO level - and only
+for the operator's own logs, which are a handful of files.
+
+This matters for moving a corpus between machines: summarise first, transfer the
+summaries. Country counts in the output are prefix-derived approximations and
+labelled `_APPROX`; real DXCC+WAE multipliers need cty.dat resolution, which
+happens on the analysis side.
 
 ## inventory_radio_folder.{ps1,py}
 
