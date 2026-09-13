@@ -34,6 +34,54 @@ DK's own machine has his network and his Gmail and can reach all of it.
 
 ---
 
+## Step 0 — inventory the local Radio folder FIRST
+
+```
+C:\Users\Multiple Monitors\OneDrive\Dima\Radio
+```
+
+DK reports this folder holds a lot of material of unknown composition (~389
+files seen referenced elsewhere). **Triage it before anything else** — it may
+already contain items 1, 2, 5, 6 and 7d, which would make most of the network
+harvest unnecessary.
+
+Two equivalent scripts are committed; use whichever suits:
+
+```powershell
+.\tools\inventory_radio_folder.ps1 -Path "C:\Users\Multiple Monitors\OneDrive\Dima\Radio"
+```
+
+```
+python3 tools/inventory_radio_folder.py "C:/Users/Multiple Monitors/OneDrive/Dima/Radio" --csv inv.csv
+```
+
+They classify every file **by content, not extension** into CABRILLO / LCR_UBN /
+ADIF / N1MM_DB / CTY / SCP / CALLHISTORY, and for each Cabrillo log extract the
+callsign, contest, year and QSO count. That turns an opaque folder into a ranked
+list in one pass.
+
+Then stage what matters:
+
+```powershell
+.\tools\inventory_radio_folder.ps1 -Path "...\Dima\Radio" -StageTo C:\temp\bfa-stage -HydrateCloudFiles
+```
+
+**OneDrive caveat — read this before running with `-HydrateCloudFiles`.** Files
+in OneDrive may be online-only placeholders. The scripts detect them via the
+`FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS` attribute and **skip them by default**
+rather than silently pulling gigabytes down. Reading one forces a download.
+`-HydrateCloudFiles` opts in; the summary tells you how many are affected first.
+
+What to look for, in priority order:
+1. **`.rpt` files or anything matching "Log Checking Report" / "UBN"** — item 1
+   below, the single most valuable thing in this project.
+2. **Cabrillo logs for PZ5CO / PZ5DX / RA3CO** — item 2.
+3. **`.s3db` N1MM databases** — these contain the logged QSOs directly and can
+   substitute for a missing Cabrillo export.
+4. **An N1MM call-history file** — item 7d.
+
+---
+
 ## Manifest, ranked by value
 
 ### 1. Own UBN / log-checking reports — highest value, irreplaceable, Gmail only

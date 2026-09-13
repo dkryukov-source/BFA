@@ -7,6 +7,34 @@ contest PC.
 |---|---|
 | `harvest_cqww.py` | Download CQ WW public logs and public log-checking reports. Resumable, rate-limited. |
 | `build_zone_db.py` | Build the callsign -> CQ zone ground-truth database (A2b) from harvested Cabrillo logs. |
+| `inventory_radio_folder.ps1` | Triage a Windows/OneDrive ham-radio folder: classify by content, extract log metadata, stage what matters. |
+| `inventory_radio_folder.py` | Cross-platform twin of the above, same classification logic. |
+
+## inventory_radio_folder.{ps1,py}
+
+Point it at an opaque folder of radio material and it returns a ranked list.
+
+```powershell
+.\inventory_radio_folder.ps1 -Path "C:\Users\Multiple Monitors\OneDrive\Dima\Radio"
+.\inventory_radio_folder.ps1 -Path "...\Dima\Radio" -StageTo C:\temp\stage -HydrateCloudFiles
+```
+
+```
+python3 inventory_radio_folder.py "/path/to/Radio" --csv inv.csv --stage /tmp/stage
+```
+
+Classifies by **content, not extension**, into CABRILLO / LCR_UBN / ADIF /
+N1MM_DB / CTY / SCP / CALLHISTORY / OTHER, and for each Cabrillo log extracts
+callsign, contest, year and QSO count.
+
+**OneDrive online-only files are skipped by default.** They are detected via
+`FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS`; reading one forces a download, so the
+scripts count and report them rather than silently hydrating gigabytes. Pass
+`-HydrateCloudFiles` / re-run to opt in.
+
+Documentation and source files (`.md`, `.py`, `.ps1`, `.json`, `.yaml`) are
+never content-sniffed — they quote log and cty content verbatim and would
+otherwise misclassify as data.
 
 ## harvest_cqww.py
 
