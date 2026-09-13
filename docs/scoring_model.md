@@ -1,25 +1,63 @@
 # CQ WW scoring and penalty model — and what it does to the lever ranking
 
-All figures below are to be re-verified against the current rules PDF
-(`https://cqww.com/rules/2026_rules_cqww.pdf`) before any of them are hardcoded.
-cqww.com is egress-blocked from the build environment; the statements here come
-from Anthropic-side web search of the CQ WW rules and log-checking blog and are
-marked with confidence. **Facts may not be independently verified.**
+cqww.com is egress-blocked from the build environment (see `data_sources.md` §0),
+so the rules text could not be read directly. Two independent sources were used
+instead and **they agree**:
 
----
+1. Anthropic-side web search of the CQ WW rules and log-checking blog.
+2. **`ftl/conval`** — a Go library that evaluates ham contest results from
+   machine-readable rule definitions. Its `rules/cq-ww-cw.yaml` is an independent
+   encoding of the CQ WW CW rules **with worked scoring examples**, including one
+   for a South American station (PY, zone 11) — the direct analogue of PZ.
+
+Confidence is raised accordingly and marked per item. Verify verbatim against
+`https://cqww.com/rules/2026_rules_cqww.pdf` before hardcoding anything that
+carries money.
 
 ## 1. Scoring (for a PZ station, South America, zone 9)
 
 - **Points:** different continent = 3; same continent, different country = 1;
   same country = 0 (still counts for multiplier credit).
-  The "2 points" variant applies to contacts *between North American stations* and
-  does **not** apply to PZ. W/VE from PZ = different continent = **3 points**.
-- **Multipliers:** (zones worked per band) + (countries worked per band), summed
-  over the six bands.
+  The 2-point variant applies **only** when both stations are in North America
+  and does **not** apply to PZ. W/VE from PZ = different continent = **3 points**.
+- **Multipliers:** zones per band + countries per band, summed over six bands.
+  Each worth 1, once per band.
 - **Score** = total QSO points x total multipliers.
+- **Exchange:** RST + CQ zone.
 
-Confidence 8/10. Verify the NA exception wording and the same-country zero-point
-rule verbatim.
+### Independently verified by conval's worked example
+
+`conval/rules/cq-ww-cw.yaml` encodes:
+
+```yaml
+scoring:
+  qsos:
+    - their_continent: [other]                      value: 3
+    - their_continent: [same], their_country: [other]   value: 1
+    - my_continent: [na], their_continent: [na]     value: 2
+    - their_country: [same]                          value: 0
+  qso_band_rule: once_per_band
+  multis:
+    - property: cq_zone       band_rule: once_per_band   value: 1
+    - property: dxcc_entity   band_rule: once_per_band   value: 1
+```
+
+and carries a worked example for `my_continent: sa, my_country: py, cq_zone: 11`:
+
+| Worked QSO | Points | Mults |
+|---|---|---|
+| K1AB (NA, K) | **3** | 2 |
+| VE1ABC (NA, VE) | **3** | 1 |
+| VE2ABC (NA, VE, dup entity) | **3** | 0 |
+| PY1ABC (same country) | **0** | 2 |
+| LU1ABC (SA, different country) | **1** | 2 |
+
+This is the PZ case exactly: **NA contacts score 3 from South America**, the
+NA-NA 2-point rule does not reach us, and **same-country QSOs score 0 but still
+give zone and country multiplier credit** — a detail easy to get wrong in the
+parser and worth an explicit unit test.
+
+Confidence **9/10** (two independent sources agreeing, one with worked examples).
 
 ## 2. Operating time
 
@@ -27,9 +65,13 @@ Standard **Single Operator** in CQ WW has **no operating-time limit and no
 minimum off-time** — the full 48 hours are available. The 24-hour limit with
 60-minute minimum off-times applies to the **Classic overlay** only.
 
+Independently confirmed by conval, which encodes `duration: 48h` globally and
+applies `duration: 24h` + `breaks: 1h` **only** under
+`operator_mode: single, overlay: classic`.
+
 This validates the A3 premise: the two 07:00-09:30z blocks are *discretionary
-sleep*, not a rules constraint, and the optimizer is free to place, resize, or
-eliminate them. Confidence 9/10 (confirmed against the 2025 rules).
+sleep*, not a rules constraint, and the optimiser is free to place, resize, or
+eliminate them. Confidence **9/10** (two independent sources).
 
 ## 3. Log-checking penalties — THE ASYMMETRY THAT MATTERS
 
